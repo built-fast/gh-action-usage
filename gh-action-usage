@@ -1,0 +1,77 @@
+#!/usr/bin/env bash
+# Usage: gh-action-usage [date] [options]
+#
+# NAME
+#   gh-action-usage -- GitHub Actions usage report with cost analysis
+#
+# SYNOPSIS
+#   gh-action-usage [YYYY-MM|YYYY-MM-DD]
+#
+# DESCRIPTION
+#   Generates a monthly TSV report of GitHub Actions usage by repository,
+#   including total usage and costs (accounting for discounts).
+#   If no date is provided, uses current month.
+#
+# OPTIONS
+#   -h, --help
+#     Print this help message and exit
+
+if [[ "$DEBUG" ]]; then
+  export PS4='+ [${BASH_SOURCE[0]##*/}:${LINENO}${FUNCNAME[0]:+:${FUNCNAME[0]}()}] '
+  set -x
+fi
+
+set -euo pipefail
+
+if [[ "${1:-}" =~ ^(-h|--help)$ ]]; then
+  sed -ne '/^#/!q;s/^#$/# /;/^# /s/^# //p' < "$0" |
+    awk -v f="${1#-h}" '!f && /^Usage:/ || u { u=!/^s*(eg:)?$/; if (!u) exit } u || f'
+  exit 1
+fi
+
+# Parse date argument
+if [[ -n "${1:-}" && ! "${1:-}" =~ ^(-h|--help)$ ]]; then
+  input_date="$1"
+  if [[ "$input_date" =~ ^[0-9]{4}-[0-9]{2}-[0-9]{2}$ ]]; then
+    # YYYY-MM-DD format
+    month_date="${input_date:0:7}-01"
+    api_month="${input_date:5:2}"
+  elif [[ "$input_date" =~ ^[0-9]{4}-[0-9]{2}$ ]]; then
+    # YYYY-MM format
+    month_date="$input_date-01"
+    api_month="${input_date:5:2}"
+  else
+    echo "Error: Invalid date format. Use YYYY-MM or YYYY-MM-DD" >&2
+    exit 1
+  fi
+else
+  month_date=$(date '+%Y-%m-01')
+  api_month=$(date '+%m')
+fi
+
+org='built-fast'
+
+gh api "/organizations/$org/settings/billing/usage?month=$api_month" |
+  jq -r --arg month_date "$month_date" '
+    # Parse month date and format as "Sep 2025"
+    ($month_date | strptime("%Y-%m-%d") | strftime("%b %Y")) as $formatted_month |
+
+    # Group by repository and sum usage/costs
+    [.usageItems[] | select(.product == "actions")] |
+    group_by(.repositoryName) |
+    map({
+      repo: .[0].repositoryName,
+      total_usage: (map(.quantity) | add),
+      total_cost: (map(.netAmount) | add)
+    }) |
+
+    # Calculate totals
+    (map(.total_usage) | add) as $total_usage |
+    (map(.total_cost) | add) as $total_cost |
+
+    # Output TSV format
+    (["Date", "Project", "Usage", "Cost"] | @tsv),
+    (.[] | [$formatted_month, .repo, (.total_usage | round | tostring | gsub("(?<=[0-9])(?=(?:[0-9]{3})+(?![0-9]))"; ",")), ("$" + (.total_cost | . * 100 | round / 100 | tostring | if test("\\.[0-9]$") then . + "0" elif test("^[0-9]+$") then . + ".00" else . end))] | @tsv),
+    (["Total", " ", ($total_usage | round | tostring | gsub("(?<=[0-9])(?=(?:[0-9]{3})+(?![0-9]))"; ",")), ("$" + ($total_cost | . * 100 | round / 100 | tostring | if test("\\.[0-9]$") then . + "0" elif test("^[0-9]+$") then . + ".00" else . end))] | @tsv)
+  ' |
+  column -t -s$'\t'
