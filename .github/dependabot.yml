@@ -12,6 +12,8 @@ updates:
       day: "monday"
       time: "11:00"
       timezone: "America/New_York"
+    cooldown:
+      default-days: 7
     groups:
       github-actions:
         patterns:
@@ -24,6 +26,8 @@ updates:
       day: "monday"
       time: "11:00"
       timezone: "America/New_York"
+    cooldown:
+      default-days: 7
     groups:
       go:
         patterns:
