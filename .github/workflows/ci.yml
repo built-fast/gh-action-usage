@@ -6,6 +6,9 @@ on:
       - main
   pull_request:
 
+permissions:
+  contents: read
+
 jobs:
   ci:
     name: Run test suite
@@ -14,21 +17,12 @@ jobs:
     steps:
       - uses: actions/checkout@v6
 
-      - name: Install built-fast/gh-shellcheck
-        env:
-          GH_TOKEN: ${{ github.token }}
-        run:
-          gh extension install built-fast/gh-shellcheck
+      - uses: actions/setup-go@v6
+        with:
+          go-version-file: go.mod
 
-      - name: Run shellcheck
-        run: |
-          gh shellcheck
+      - name: Run tests
+        run: make test
 
-      - name: Install shfmt
-        run: |
-          sudo rm -f /var/lib/man-db/auto-update
-          sudo apt-get install -y shfmt
-
-      - name: Run shfmt
-        run: |
-          shfmt -d -i 2 -sr -ci .
+      - name: Build
+        run: make build

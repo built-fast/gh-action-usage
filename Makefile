@@ -1,18 +1,30 @@
+BINARY := gh-action-usage
+
 .PHONY: help
 help: ## show this help text
 	@grep -E '^[a-zA-Z_-]+:.*?## .*$$' $(MAKEFILE_LIST) | sort | awk 'BEGIN {FS = ":.*?## "}; {printf "\033[36m%-30s\033[0m %s\n", $$1, $$2}'
 
+.PHONY: build
+build: ## build the extension binary
+	go build -o $(BINARY) .
+
+.PHONY: install
+install: build ## build and install the extension locally
+	gh extension install .
+
 .PHONY: test
-test: test-shellcheck test-shfmt ## run full test suite
+test: vet ## run full test suite
+	go test ./...
 
-.PHONY: test-shellcheck
-test-shellcheck: ## run shellcheck
-	gh shellcheck
-
-.PHONY: test-shfmt
-test-shfmt: ## run shfmt
-	shfmt -d -i 2 -sr -ci .
+.PHONY: vet
+vet: ## run go vet and check formatting
+	go vet ./...
+	@test -z "$$(gofmt -l .)" || (gofmt -l . && echo "run 'make format'" && exit 1)
 
 .PHONY: format
-format: ## format all shell scripts
-	shfmt -w -i 2 -sr -ci .
+format: ## format Go sources
+	gofmt -w .
+
+.PHONY: clean
+clean: ## remove build artifacts
+	rm -f $(BINARY)

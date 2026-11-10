@@ -16,3 +16,15 @@ updates:
       github-actions:
         patterns:
           - "*"
+
+  - package-ecosystem: "gomod"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+      day: "monday"
+      time: "11:00"
+      timezone: "America/New_York"
+    groups:
+      go:
+        patterns:
+          - "*"
